@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+  fluentbit:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: fluent-bit-out-rsyslog:latest
+    container_name: "fluentbit"
+    volumes:
+      - ./test-conf/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+    ports:
+      - 24224:24224
+  rsyslog:
+    image: jumanjiman/rsyslog:latest
+    container_name: "rsyslog"
+    volumes:
+      - ./test-conf/rsyslogd.conf:/etc/rsyslogd.conf
