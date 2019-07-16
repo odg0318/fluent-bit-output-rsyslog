@@ -85,8 +85,6 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 	logger := (*Logger)(output.FLBPluginGetContext(ctx).(unsafe.Pointer))
 	dec := output.NewDecoder(data, int(length))
 
-	logger.Out(ctx, data, length, tag)
-
 	for {
 		ret, _, record := output.GetRecord(dec)
 		if ret != 0 {
