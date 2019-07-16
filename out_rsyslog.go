@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/syslog"
-	"time"
 	"unsafe"
 
 	"github.com/fluent/fluent-bit-go/output"
@@ -27,7 +26,7 @@ func (l *Logger) connect() error {
 		return nil
 	}
 
-	writer, err := syslog.Dial(l.network, l.addr, syslog.LOG_WARNING|syslog.LOG_DAEMON, "fluent")
+	writer, err := syslog.Dial(l.network, l.addr, syslog.LOG_WARNING|syslog.LOG_DAEMON, l.tag)
 	if err != nil {
 		return err
 	}
@@ -43,10 +42,11 @@ func (l *Logger) Info(m string) error {
 	return l.writer.Info(m)
 }
 
-func NewLogger(network, addr string) (*Logger, error) {
+func NewLogger(network, addr, tag string) (*Logger, error) {
 	logger := Logger{
 		network: network,
 		addr:    addr,
+		tag:     tag,
 	}
 
 	return &logger, nil
@@ -61,10 +61,11 @@ func FLBPluginRegister(ctx unsafe.Pointer) int {
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	network := output.FLBPluginConfigKey(plugin, "network")
 	addr := output.FLBPluginConfigKey(plugin, "addr")
+	tag := output.FLBPluginConfigKey(plugin, "tag")
 
-	fmt.Printf("plugin=%s network=%s addr=%s\n", pluginName, network, addr)
+	fmt.Printf("plugin=%s network=%s addr=%s tag=%s\n", pluginName, network, addr, tag)
 
-	logger, err := NewLogger(network, addr)
+	logger, err := NewLogger(network, addr, tag)
 	if err != nil {
 		return output.FLB_ERROR
 	}
@@ -84,26 +85,13 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 	logger := (*Logger)(output.FLBPluginGetContext(ctx).(unsafe.Pointer))
 	dec := output.NewDecoder(data, int(length))
 
+	logger.Out(ctx, data, length, tag)
+
 	for {
-		ret, ts, record := output.GetRecord(dec)
+		ret, _, record := output.GetRecord(dec)
 		if ret != 0 {
 			break
 		}
-
-		// Print record keys and values
-		var timestamp time.Time
-		switch tts := ts.(type) {
-		case output.FLBTime:
-			timestamp = tts.Time
-		case uint64:
-			// From our observation, when ts is of type uint64 it appears to
-			// be the amount of seconds since unix epoch.
-			timestamp = time.Unix(int64(tts), 0)
-		default:
-			timestamp = time.Now()
-		}
-
-		record["timestamp"] = timestamp
 
 		m := map[string]interface{}{}
 		for k, v := range record {
